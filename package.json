@@ -1,0 +1,13 @@
+{
+  "name": "mcp-elicitation-demo",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n SERVER,WEB -c green,blue \"pnpm --filter mcp-server dev\" \"pnpm --filter web dev\"",
+    "build": "pnpm -r build",
+    "start": "pnpm --filter mcp-server start & pnpm --filter web start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "typescript": "^5.5.4"
+  }
+}
