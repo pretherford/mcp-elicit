@@ -30,7 +30,8 @@ export default function ElicitationForm({ elicitation, onSubmit }: Props) {
         return;
       }
       const arrayBuffer = await file.arrayBuffer();
-      const dataBase64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      const uint8Array = new Uint8Array(arrayBuffer);
+      const dataBase64 = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
       const value: FileUploadValue = {
         filename: file.name,
         mimeType: file.type || "application/octet-stream",

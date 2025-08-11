@@ -18,7 +18,14 @@ export default function Page() {
   const doConnect = useCallback(async () => {
     setConnecting(true);
     try {
-      const conn = await connectMcp(process.env.NEXT_PUBLIC_MCP_SERVER_URL || "ws://localhost:4000");
+      // Fetch the token before connecting
+      const tokenResponse = await fetch("/api/mcp-token");
+      if (!tokenResponse.ok) {
+        throw new Error("Failed to get MCP token");
+      }
+      const { token } = await tokenResponse.json();
+      
+      const conn = await connectMcp(process.env.NEXT_PUBLIC_MCP_SERVER_URL || "http://localhost:4000/mcp/sse", token);
       mcpRef.current = conn;
       setConnected(true);
     } catch (e) {
@@ -31,13 +38,13 @@ export default function Page() {
 
   const startDemo = useCallback(async () => {
     if (!mcpRef.current) return;
-    const r = await callCollectProfile(mcpRef.current);
+    const r = await callCollectProfile();
     setResponse(r);
   }, []);
 
   const handleSubmit = useCallback(async (values: ElicitationSubmission) => {
     if (!mcpRef.current) return;
-    const r = await callCollectProfile(mcpRef.current, values);
+    const r = await callCollectProfile(values);
     setResponse(r);
   }, []);
 
