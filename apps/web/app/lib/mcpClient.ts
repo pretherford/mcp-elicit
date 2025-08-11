@@ -1,5 +1,5 @@
-import { Client } from "@modelcontextprotocol/sdk/client";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 
 function isUrlLike(v: unknown): v is URL {
   return typeof v === "object" && v !== null && (v as any).href && (v as any).origin;
@@ -33,10 +33,8 @@ async function connectMcpInternal(sseUrl: string | URL, token?: string): Promise
   // Log without leaking query
   console.log("[MCP] Connecting via SSE:", url.origin + url.pathname, "token?", Boolean(useToken));
 
-  // IMPORTANT: pass a string to the transport to avoid any coercion bugs
-  const transport = new SSEClientTransport(url.toString(), {
-    headers: useToken ? { Authorization: `Bearer ${useToken}` } : undefined,
-  });
+  // IMPORTANT: pass auth token as query parameter since EventSourceInit doesn't support headers
+  const transport = new SSEClientTransport(new URL(url.toString()));
   currentTransport = transport;
 
   const client = new Client({ name: "web", version: "0.1.0" }, { capabilities: {} });
