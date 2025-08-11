@@ -18,7 +18,7 @@ export async function GET(_req: NextRequest) {
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(session.user.email)
     .setIssuedAt()
-    .setExpirationTime("5m")
+    .setExpirationTime("1h")
     .sign(new TextEncoder().encode(secret));
 
   return NextResponse.json({ token });
