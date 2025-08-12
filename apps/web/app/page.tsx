@@ -166,7 +166,7 @@ export default function Page() {
   }, []);
 
   return (
-    <div className="space-y-4">
+  <div className="space-y-6">
   {!isAuthed ? (
         <div className="grid gap-3">
           <p className="text-gray-700">This demo requires Google Sign-In.</p>
@@ -179,27 +179,34 @@ export default function Page() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="text-sm text-gray-700">
-            Status:{" "}
-            <span className={connected ? "text-green-600" : connecting ? "text-yellow-600" : "text-red-600"}>
-              {connected ? "Connected to MCP" : connecting ? "Connecting..." : "Not connected"}
+          <div className="flex items-center gap-3">
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${
+                connected
+                  ? 'bg-green-50 text-green-700 ring-green-600/20'
+                  : connecting
+                  ? 'bg-yellow-50 text-yellow-800 ring-yellow-600/20'
+                  : 'bg-red-50 text-red-700 ring-red-600/20'
+              }`}
+            >
+              {connected ? 'Connected to MCP' : connecting ? 'Connecting…' : 'Not connected'}
             </span>
-            <button 
+            <button
               onClick={fetchAndConnect}
               disabled={connecting}
-              className={`ml-2 px-2 py-1 text-xs ${connecting ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300'} rounded`}
+              className={`inline-flex items-center rounded-md px-2.5 py-1.5 text-xs font-medium shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-600 ${
+                connecting ? 'cursor-not-allowed bg-gray-200 text-gray-500' : 'bg-gray-900 text-white hover:bg-gray-800'
+              }`}
             >
-              {connecting ? "Connecting..." : "Reconnect"}
+              {connecting ? 'Connecting…' : 'Reconnect'}
             </button>
-            <div className="text-xs text-gray-500 mt-1">
-              Client initialized: {client ? "Yes" : "No"}
-            </div>
+            <span className="text-xs text-gray-500">Client initialized: {client ? 'Yes' : 'No'}</span>
           </div>
       {!response && (
             <button
-        disabled={!client}
+              disabled={!client}
               onClick={startDemo}
-              className="rounded-md bg-gray-900 px-3 py-1.5 text-white hover:bg-gray-800 disabled:opacity-50"
+              className="rounded-md bg-blue-600 px-4 py-2 text-white shadow-sm transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Start Elicitation Demo
             </button>
@@ -214,7 +221,7 @@ export default function Page() {
             </div>
           )}
           {response?.kind === "success" && (
-            <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <div className="rounded-xl border border-gray-200 bg-white/80 p-6 shadow-sm ring-1 ring-gray-100">
               <h3 className="text-lg font-semibold">Success</h3>
               <p className="mt-1 text-gray-700">{response.message}</p>
               {response.thumbnailDataUrl && (
@@ -235,7 +242,7 @@ export default function Page() {
                 {JSON.stringify(response.received, null, 2)}
               </pre>
               <button
-                className="mt-3 rounded-md bg-gray-900 px-3 py-1.5 text-white hover:bg-gray-800"
+                className="mt-3 rounded-md bg-gray-900 px-3 py-1.5 text-white shadow-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 onClick={() => setResponse(null)}
               >
                 Run Again
