@@ -1,11 +1,30 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import type {
-  Elicitation,
-  ElicitationSubmission,
-  FileUploadValue
-} from "../../shared/types";
+
+// Simplified types for our specific use case
+type Field = {
+  name: string;
+  label: string;
+  type: "text" | "email" | "textarea" | "file";
+  required?: boolean;
+  minLength?: number;
+  maxLength?: number;
+  errors?: string[];
+};
+
+type Elicitation = {
+  title: string;
+  description?: string;
+  fields: Field[];
+};
+
+type ElicitationSubmission = {
+  name?: string;
+  email?: string;
+  bio?: string;
+  avatar?: string;
+};
 
 type Props = {
   elicitation: Elicitation;
@@ -16,33 +35,35 @@ export default function ElicitationForm({ elicitation, onSubmit }: Props) {
   const [values, setValues] = useState<ElicitationSubmission>({});
   const [submitting, setSubmitting] = useState(false);
 
+  // Handle text input changes
   const handleChange = useCallback(
-    (id: string, value: string | number | boolean | string[] | FileUploadValue | null) => {
-      setValues((v) => ({ ...v, [id]: value }));
+    (name: string, value: string) => {
+      setValues((prev) => ({ ...prev, [name]: value }));
     },
     []
   );
 
+  // Handle file input changes
   const handleFile = useCallback(
-    async (id: string, file: File | null) => {
+    async (name: string, file: File | null) => {
       if (!file) {
-        handleChange(id, null);
+        handleChange(name, "");
         return;
       }
-      const arrayBuffer = await file.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      const dataBase64 = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
-      const value: FileUploadValue = {
-        filename: file.name,
-        mimeType: file.type || "application/octet-stream",
-        dataBase64
+      
+      // Read file as data URL
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        handleChange(name, dataUrl);
       };
-      handleChange(id, value);
+      reader.readAsDataURL(file);
     },
     [handleChange]
   );
 
-  const submit = useCallback(
+  // Handle form submission
+  const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
       try {
@@ -56,7 +77,7 @@ export default function ElicitationForm({ elicitation, onSubmit }: Props) {
   );
 
   return (
-    <form onSubmit={submit} className="space-y-4 rounded-lg border border-gray-200 bg-white p-4">
+    <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-gray-200 bg-white p-4">
       <div>
         <h3 className="m-0 text-lg font-semibold">{elicitation.title}</h3>
         {elicitation.description && (
@@ -64,157 +85,68 @@ export default function ElicitationForm({ elicitation, onSubmit }: Props) {
         )}
       </div>
 
-      {elicitation.fields.map((f) => {
-        const key = f.id;
-
-        const label = (
+      {elicitation.fields.map((field) => {
+        const { name, label, type, required, errors } = field;
+        
+        // Common label component
+        const fieldLabel = (
           <label className="block text-sm font-medium text-gray-800">
-            {f.label} {f.required ? "*" : ""}
+            {label} {required ? "*" : ""}
           </label>
         );
-
-        const help = f.helpText ? <small className="text-gray-500">{f.helpText}</small> : null;
-        const error =
-          "error" in f && (f as any).error ? (
-            <div className="text-sm text-red-700">{(f as any).error}</div>
-          ) : null;
-
-        switch (f.type) {
+        
+        // Display errors if any
+        const errorDisplay = errors && errors.length > 0 ? (
+          <div className="text-sm text-red-700">{errors.join(", ")}</div>
+        ) : null;
+        
+        switch (type) {
           case "text":
+          case "email":
             return (
-              <div key={key} className="grid gap-1.5">
-                {label}
+              <div key={name} className="grid gap-1.5">
+                {fieldLabel}
                 <input
                   className="rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-                  type="text"
-                  placeholder={f.placeholder}
-                  required={!!f.required}
-                  onChange={(e) => handleChange(key, e.target.value)}
+                  type={type}
+                  name={name}
+                  required={required}
+                  minLength={field.minLength}
+                  maxLength={field.maxLength}
+                  onChange={(e) => handleChange(name, e.target.value)}
+                  value={values[name as keyof ElicitationSubmission] as string || ""}
                 />
-                {help}
-                {error}
+                {errorDisplay}
               </div>
             );
           case "textarea":
             return (
-              <div key={key} className="grid gap-1.5">
-                {label}
+              <div key={name} className="grid gap-1.5">
+                {fieldLabel}
                 <textarea
                   className="min-h-[100px] rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder={f.placeholder}
-                  required={!!f.required}
-                  onChange={(e) => handleChange(key, e.target.value)}
+                  name={name}
+                  required={required}
+                  minLength={field.minLength}
+                  maxLength={field.maxLength}
+                  onChange={(e) => handleChange(name, e.target.value)}
+                  value={values[name as keyof ElicitationSubmission] as string || ""}
                 />
-                {help}
-                {error}
-              </div>
-            );
-          case "number":
-            return (
-              <div key={key} className="grid gap-1.5">
-                {label}
-                <input
-                  className="rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-                  type="number"
-                  required={!!f.required}
-                  min={f.min}
-                  max={f.max}
-                  step={f.step}
-                  onChange={(e) => handleChange(key, e.target.value === "" ? null : Number(e.target.value))}
-                />
-                {help}
-                {error}
-              </div>
-            );
-          case "select":
-            return (
-              <div key={key} className="grid gap-1.5">
-                {label}
-                <select
-                  className="rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-                  required={!!f.required}
-                  onChange={(e) => handleChange(key, e.target.value)}
-                  defaultValue=""
-                >
-                  <option value="" disabled>
-                    Select…
-                  </option>
-                  {f.options.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                {help}
-                {error}
-              </div>
-            );
-          case "multiselect":
-            return (
-              <div key={key} className="grid gap-1.5">
-                {label}
-                <select
-                  multiple
-                  className="rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-                  onChange={(e) => {
-                    const selected: string[] = Array.from(e.target.selectedOptions).map((o) => o.value);
-                    handleChange(key, selected);
-                  }}
-                >
-                  {f.options.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                {help}
-                {error}
-              </div>
-            );
-          case "checkbox":
-            return (
-              <div key={key} className="flex items-center gap-2">
-                <input
-                  id={key}
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  onChange={(e) => handleChange(key, e.target.checked)}
-                />
-                <label htmlFor={key} className="text-sm text-gray-800">
-                  {f.label}
-                </label>
-                {help}
-                {error}
-              </div>
-            );
-          case "date":
-            return (
-              <div key={key} className="grid gap-1.5">
-                {label}
-                <input
-                  type="date"
-                  className="rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-                  min={f.min}
-                  max={f.max}
-                  required={!!f.required}
-                  onChange={(e) => handleChange(key, e.target.value)}
-                />
-                {help}
-                {error}
+                {errorDisplay}
               </div>
             );
           case "file":
             return (
-              <div key={key} className="grid gap-1.5">
-                {label}
+              <div key={name} className="grid gap-1.5">
+                {fieldLabel}
                 <input
                   type="file"
-                  accept={f.accept}
+                  name={name}
+                  accept="image/*"
                   className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-gray-900 file:px-3 file:py-1.5 file:text-white hover:file:bg-gray-800"
-                  onChange={(e) => handleFile(key, e.target.files?.[0] ?? null)}
+                  onChange={(e) => handleFile(name, e.target.files?.[0] ?? null)}
                 />
-                {help}
-                {error}
+                {errorDisplay}
               </div>
             );
           default:
@@ -228,7 +160,7 @@ export default function ElicitationForm({ elicitation, onSubmit }: Props) {
           disabled={submitting}
           className="rounded-md bg-blue-600 px-3 py-1.5 text-white hover:bg-blue-500 disabled:opacity-50"
         >
-          {elicitation.submitLabel ?? "Submit"}
+          {submitting ? "Submitting..." : "Submit"}
         </button>
       </div>
     </form>

@@ -1,97 +1,32 @@
-// Client-side copy of elicitation types
+// Simple shared types for the elicitation demo
 
-export type ElicitationFieldBase = {
-  id: string;
+// Input types for the collect_profile tool
+export interface ElicitationSubmission {
+  name?: string;
+  email?: string;
+  bio?: string;
+  avatar?: string; // Base64 data URL
+}
+
+// Field definition for the elicitation form
+export interface ElicitationField {
+  name: string;
   label: string;
+  type: "text" | "email" | "textarea" | "file";
   required?: boolean;
-  helpText?: string;
-};
-
-export type TextField = ElicitationFieldBase & {
-  type: "text";
-  placeholder?: string;
-  pattern?: string;
   minLength?: number;
   maxLength?: number;
-  error?: string;
-};
+  errors?: string[];
+}
 
-export type TextAreaField = ElicitationFieldBase & {
-  type: "textarea";
-  placeholder?: string;
-  minLength?: number;
-  maxLength?: number;
-  error?: string;
-};
-
-export type NumberField = ElicitationFieldBase & {
-  type: "number";
-  min?: number;
-  max?: number;
-  step?: number;
-  error?: string;
-};
-
-export type SelectField = ElicitationFieldBase & {
-  type: "select";
-  options: Array<{ value: string; label: string }>;
-  error?: string;
-};
-
-export type MultiSelectField = ElicitationFieldBase & {
-  type: "multiselect";
-  options: Array<{ value: string; label: string }>;
-  error?: string;
-};
-
-export type CheckboxField = ElicitationFieldBase & {
-  type: "checkbox";
-  error?: string;
-};
-
-export type DateField = ElicitationFieldBase & {
-  type: "date";
-  min?: string;
-  max?: string;
-  error?: string;
-};
-
-export type FileField = ElicitationFieldBase & {
-  type: "file";
-  accept?: string;
-  maxBytes?: number;
-  error?: string;
-};
-
-export type ElicitationField =
-  | TextField
-  | TextAreaField
-  | NumberField
-  | SelectField
-  | MultiSelectField
-  | CheckboxField
-  | DateField
-  | FileField;
-
-export type Elicitation = {
-  id: string;
+// Form definition returned by the collect_profile tool
+export interface Elicitation {
   title: string;
   description?: string;
-  submitLabel?: string;
   fields: ElicitationField[];
-};
+}
 
-export type FileUploadValue = {
-  filename: string;
-  mimeType: string;
-  dataBase64: string;
-};
-
-export type ElicitationSubmission = Record<
-  string,
-  string | number | boolean | string[] | FileUploadValue | null
->;
-
+// Response types from the collect_profile tool
 export type ElicitationResponse =
   | {
       kind: "requiresAction";
@@ -102,9 +37,10 @@ export type ElicitationResponse =
       message: string;
       received: ElicitationSubmission;
       thumbnailDataUrl?: string;
-      persistedFile?: { id: string; path: string; filename: string } | null;
+      persistedFile?: { path: string; size: number };
     }
   | {
       kind: "validationError";
+      message?: string;
       elicitation: Elicitation;
     };
