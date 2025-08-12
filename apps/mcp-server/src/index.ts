@@ -43,6 +43,8 @@ const mcp = new McpServer(
 
 // Track active SSE transports by sessionId to route POST messages
 const activeTransports = new Map<string, SSEServerTransport>();
+// Map transport (server) session IDs back to client-provided session IDs for auth correlation
+const transportToClientSession = new Map<string, string>();
 
 // --- Tool registration and handlers -------------------------------------------------
 
@@ -405,8 +407,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     
-    // Add or update session
-    validSessions.set(sessionId, { valid: true, lastAccess: Date.now() });
+  // Add or update session (track by client session ID)
+  validSessions.set(sessionId, { valid: true, lastAccess: Date.now() });
 
   console.log(`[MCP] SSE connected (session ${sessionId})`);
     
@@ -422,6 +424,13 @@ const server = http.createServer(async (req, res) => {
       // Create transport with proper parameters and connect
       const transport = new SSEServerTransport(SSE_PATH, res);
       console.log("[MCP] Created SSE transport, connecting to MCP server");
+      // Correlate transport session to client session for later POST auth/routing
+      if (sessionId) {
+        transportToClientSession.set(transport.sessionId, sessionId);
+  console.log(`[MCP] Mapped transport ${transport.sessionId} -> client ${sessionId}`);
+        // Also mark the transport session ID as valid for auth purposes (SDK may use it on POST)
+        validSessions.set(transport.sessionId, { valid: true, lastAccess: Date.now() });
+      }
 
       // Interceptors to guarantee tools handling across SDK versions
       const originalHandlePostMessage = transport.handlePostMessage.bind(transport) as any;
@@ -471,6 +480,8 @@ const server = http.createServer(async (req, res) => {
       activeTransports.set(transport.sessionId, transport);
       transport.onclose = () => {
         activeTransports.delete(transport.sessionId);
+  transportToClientSession.delete(transport.sessionId);
+        validSessions.delete(transport.sessionId);
       };
       
   // Connect then re-attach interceptors to ensure ours stays active
@@ -483,6 +494,10 @@ const server = http.createServer(async (req, res) => {
       
       // Clean up the session on error
       validSessions.delete(sessionId);
+      // Best effort cleanup of any transport mapping if available
+      try {
+        // no access to transport here
+      } catch {}
     }
     return;
   }
@@ -491,25 +506,80 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && url.pathname === SSE_PATH) {
     setCors();
 
-    // Extract session ID from SDK header first, then from URL as fallback
-    const headerSession = (req.headers["x-sse-session"] || req.headers["x-mcp-session"]) as string | undefined;
-    const sessionId = (headerSession && headerSession.trim()) || url.searchParams.get("sessionId");
-    if (!sessionId) {
+    // Extract session identifiers
+    // - headerSession: server transport's session ID (used by SDK to route messages)
+    // - clientSessionId: client-provided session ID from URL (used by us to track auth state)
+    // Try multiple possible header variants used by different SDK versions
+    const headerSession = (
+      (req.headers["x-sse-session"] as string | undefined) ||
+      (req.headers["x-sse-session-id"] as string | undefined) ||
+      (req.headers["x-mcp-session"] as string | undefined) ||
+      (req.headers["x-mcp-session-id"] as string | undefined) ||
+      (req.headers["x-session-id"] as string | undefined) ||
+      (req.headers["x-event-source-session"] as string | undefined)
+    );
+    const querySession = url.searchParams.get("sessionId") || undefined;
+    // Determine clientSessionId, remapping if the provided value is actually a transport ID
+    let clientSessionId: string | null = null;
+    if (headerSession && transportToClientSession.has(headerSession.trim())) {
+      clientSessionId = transportToClientSession.get(headerSession.trim())!;
+    } else if (querySession && transportToClientSession.has(querySession)) {
+      clientSessionId = transportToClientSession.get(querySession)!;
+    } else {
+      clientSessionId = querySession || null;
+    }
+    if (!headerSession && !clientSessionId) {
       res.statusCode = 400;
       res.end("Missing session identifier");
       return;
     }
 
+    // If header is missing but we have exactly one active transport, fall back to it
+    if (!headerSession && activeTransports.size === 1) {
+      const onlyTransportId = Array.from(activeTransports.keys())[0];
+      const mappedClient = transportToClientSession.get(onlyTransportId);
+      // If clientSessionId is empty OR equals a known transport ID, remap to client
+      if ((!
+        clientSessionId
+      ) || transportToClientSession.has(clientSessionId)) {
+        if (mappedClient) clientSessionId = mappedClient;
+      }
+      // Optional: log once for visibility
+      console.warn(`[MCP] POST without header session; using single active transport ${onlyTransportId} mapped to client ${clientSessionId}`);
+    }
+
     // Check authentication for this session
-    const { valid } = await checkAuth(sessionId);
+    // IMPORTANT: validate using the CLIENT session ID, which is what we stored in validSessions during GET
+  const { valid } = await checkAuth(clientSessionId || null);
     if (!valid) {
+      console.warn(`[MCP] 401 Unauthorized (POST). headerSession=${headerSession} clientSessionId=${clientSessionId}`);
       res.statusCode = 401;
       res.end("Unauthorized");
       return;
     }
 
-  const transport = activeTransports.get(sessionId);
+    // Route the POST using the TRANSPORT session ID when available, else fall back to client session ID
+    // Choose routing ID: prefer header transport ID; else if query is a known transport ID use it; else single active transport; else fall back to mapped client
+    let lookupId = headerSession && headerSession.trim();
+    if (!lookupId) {
+      if (querySession && activeTransports.has(querySession)) {
+        lookupId = querySession;
+      } else if (activeTransports.size === 1) {
+        lookupId = Array.from(activeTransports.keys())[0];
+      } else if (clientSessionId && activeTransports.has(clientSessionId)) {
+        // Unlikely but handle if clientSessionId equals a transport ID
+        lookupId = clientSessionId;
+      }
+    }
+    if (!lookupId) {
+      console.warn(`[MCP] 404 Unable to resolve routing ID. headerSession=${headerSession} querySession=${querySession} clientSessionId=${clientSessionId}`);
+      res.statusCode = 404;
+      res.end("Session not found");
+      return;
+    }
+    const transport = activeTransports.get(lookupId);
     if (!transport) {
+      console.warn(`[MCP] 404 Session not found for lookupId=${lookupId}. headerSession=${headerSession} clientSessionId=${clientSessionId}`);
       res.statusCode = 404;
       res.end("Session not found");
       return;
